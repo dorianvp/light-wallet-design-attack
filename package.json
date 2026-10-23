@@ -1,0 +1,16 @@
+{
+  "name": "zcash-light-wallet-protocol-analysis",
+  "version": "1.0.0",
+  "description": "Security analysis of the Zcash light-wallet privacy protocol proposed in \"Making Zcash Light Wallets Faster and More Private\" (defuse.ca, March 2023)",
+  "private": true,
+  "scripts": {
+    "sim": "python3 sim/run_all.py",
+    "witness": "python3 analysis/f11_witness_leak.py",
+    "defense": "python3 defense/run_all.py",
+    "quint:test": "quint test quint/ZecLight.qnt --main ZecLightTests --match '^t_'",
+    "quint:verify": "quint verify --main ZecLight quint/ZecLight.qnt --invariant p8b_bindingBlocks --max-steps 10"
+  },
+  "dependencies": {
+    "@informalsystems/quint": "^0.33.0"
+  }
+}

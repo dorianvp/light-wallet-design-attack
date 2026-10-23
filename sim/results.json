@@ -1,0 +1,138 @@
+[
+  {
+    "id": "A_F1",
+    "target": "diversifier unlinkability (implicit P0)",
+    "verdict": "BREAK",
+    "mechanism": "plain tuple equality: naive derivation => identical (G_r,S_r,K_TT,D) on every diversified address and identical (K_TT,D) across redundancy servers",
+    "control": "per-diversifier derivation => tuples equal? False (fix blocks the link)",
+    "notes": "naive_linked=True redundancy_linked=True fixed_linked=False"
+  },
+  {
+    "id": "A_F2",
+    "target": "P3/P5 framing (attribution needs 'both servers compromised')",
+    "verdict": "BREAK",
+    "mechanism": "address necessarily held by every sender => DS derives all T_e from disclosed (K_TT,G_r); its own index gives counts; + one MA work product gives exact tx attribution. No key compromise.",
+    "control": "MA alone attributes? False (MA knows no tag material: P4 holds); DS alone (no disclosure) sees only anonymous buckets: P3's count clause holds",
+    "notes": "counts_ok=True attribution_ok=True recovered={1: ['tx0000', 'tx0001'], 2: ['tx0003', 'tx0004']} truth={1: ['tx0000', 'tx0001'], 2: ['tx0003', 'tx0004']}"
+  },
+  {
+    "id": "A_F3",
+    "target": "P6 ('cannot connect the groups from different days')",
+    "verdict": "BREAK",
+    "mechanism": "K_TT is epoch-independent: one later address leak => T_e for every past epoch => retained (or rebuilt-from-public-lists) index readout links all daily groups",
+    "control": "deletion discipline does NOT help if ssk ever leaks: public post-mix lists + ssk re-create the whole index",
+    "notes": "retro_counts_ok=True rebuilt_after_state_leak_ok=True retro={1: 1, 2: 3, 3: 2} truth={1: 1, 2: 3, 3: 2} reglog_ip_tieback=10.0.0.9"
+  },
+  {
+    "id": "A_F4",
+    "target": "P1 (GPA learns nothing about when/how many)",
+    "verdict": "BREAK",
+    "mechanism": "response volume = ceil(notes * |C^L| / packet) packets at fixed rate => session length/duration reveals the note count",
+    "control": "pad-to-max makes profiles equal ((11, 11) == (11, 11)) at 11x download overhead for the 1-note wallet (the author's own trilemma)",
+    "notes": "V1 session=(1, 1) V2 session=(11, 11) distinguishable=True"
+  },
+  {
+    "id": "A_F5",
+    "target": "P6 delegation clause (live-server reading)",
+    "verdict": "BREAK",
+    "mechanism": "wallet queries each past epoch's tag from the same IP during sync; the live DS groups them by network identity -- no address needed",
+    "control": "fresh circuit per lookup defeats IP grouping (linkable=False); GPA timing correlation remains (out of simulation scope)",
+    "notes": "ip_groups=[(1, b'\\xeb=mB\\xcb\\xdf\\xb2\\xf0\\xd2\\xb6\\xbc\\x1f\\xf2\\xbeg\\xb6\"\\x13\\xca\\xda\\n\\x11\\r:\\x14\\x03\\xd5\\xc4x\\xc2Ui'), (2, b'X\\xc8\\xc7\\xe7\\xffIG\\xe3t\\xf6\\x8c#\\x07#\\xf5\\xb5Y$\\'R\\xf8\\xfe\\xf6GV\\xf4\"\\xd5z=\\x10b'), (3, b'\\x05F~\\xe6\\xc2o_/\\xdf3\\x18\\xe8\\x9dB\\x89\\xb9`N%\\x04\\x94\\x96\\xa8\\x8e\\xe8\\xca\\xa1V)V\\xabk')] truth=epochs 1..3"
+  },
+  {
+    "id": "A_F6",
+    "target": "granular delegation / basic privacy (spec under-specification)",
+    "verdict": "BREAK",
+    "mechanism": "s := r (no domain separation): registration transmits r => server computes K_TT = H(r) => every epoch's tag from the registration log alone",
+    "control": "domain-separated derivation: H(r) != K_TT and s unknown to server => blocked=True",
+    "notes": "tags_match=True buckets_readable=True"
+  },
+  {
+    "id": "A_F7a",
+    "target": "P10 completeness/liveness",
+    "verdict": "BREAK",
+    "mechanism": "server returns a subset; everything returned authenticates, so the wallet cannot detect the omission locally; only a full trial-decryption rescan recovers the missing note",
+    "control": "full rescan recovers 3 notes (rescan_finds=True) -- exactly the cost the protocol exists to avoid",
+    "notes": "received=2 truth=3 all_returned_authenticate=True"
+  },
+  {
+    "id": "A_F7b",
+    "target": "P3 count integrity ('how many') / count pollution",
+    "verdict": "BREAK",
+    "mechanism": "forged C^PoM with the victim's tag (computable from the address, with a VALID pi) inflates the per-tag bucket at zero on-chain cost; wallet discards the note but the DS-observed count is polluted",
+    "control": "victim's accepted notes unaffected (cross-ref N_g: commitment authentication discards the garbage)",
+    "notes": "observed_count=2 true=1 accepted=1 discarded=1"
+  },
+  {
+    "id": "A_F8",
+    "target": "P6 ('only granted detection authority for a limited number of epochs')",
+    "verdict": "BREAK",
+    "mechanism": "x_e - PRF^D(K_TT,e) = dsk (linear scalar cancellation); from dsk the delegate derives every epoch's key and silently trial-decrypts all C^D forever",
+    "control": "delegation itself functions correctly (service_works=True); the break needs only ONE counterparty or address leak at any later time",
+    "notes": "dsk_recovered=True detected={1: 1, 2: 1, 3: 1, 4: 1} truth={1: 1, 2: 1, 3: 1, 4: 1}"
+  },
+  {
+    "id": "N_a",
+    "target": "P8 case (a): sender->server identification oracle",
+    "verdict": "BLOCKED",
+    "mechanism": "pi binds the tag's G_r to the epk's base: openability at the attacker's own S_r* forces epk-base = G_r*, so the tag must use G_r* too and can never be the victim's",
+    "control": "pi disabled => attacker plants into victim bucket: True (oracle works); valid-witness check: no_witness=True -- note the attacker CAN construct valid pi (it holds the address); it just cannot satisfy both relations on different bases",
+    "notes": "planted_with_pi=False planted_without_pi=True"
+  },
+  {
+    "id": "N_b",
+    "target": "P8 case (b): querying another wallet's tag",
+    "verdict": "BLOCKED",
+    "mechanism": "pi_query proves knowledge of (s, r) with GroupHash(r) = G_r and H(s) = K_TT: preimage resistance means address holders (who only have K_TT, G_r) cannot construct it",
+    "control": "pi_query disabled => bucket returned to attacker: True",
+    "notes": "proof_constructed=False forged_verifies=False query_rejected=True"
+  },
+  {
+    "id": "N_c",
+    "target": "cross-epoch replay of pre-mix ciphertexts",
+    "verdict": "BLOCKED",
+    "mechanism": "the MA opens epoch-2 pre-mix entries with AD 'mix'||2; the replayed ciphertext was authenticated under 'mix'||1 => AEAD open fails => the entry never reaches the epoch-2 post-mix list",
+    "control": "epoch-free-AD protocol variant => replayed entry appears in epoch-2 list: True",
+    "notes": "in_list_with_ad=False in_list_without_ad_variant=True"
+  },
+  {
+    "id": "N_d",
+    "target": "tagging by repetition via duplicate pre-mix entries",
+    "verdict": "BLOCKED",
+    "mechanism": "the MA decrypts every pre-mix entry FIRST and dedups on the canonical post-mix bytes; k re-encryptions of the same C^PoM decode to the same bytes => one output entry",
+    "control": "dedup disabled => multiplicity 5 == k (=5): True",
+    "notes": "multiplicity_with_dedup=1 multiplicity_without=5"
+  },
+  {
+    "id": "N_e",
+    "target": "anonymity of the S_r decryption trick (no base test)",
+    "verdict": "BLOCKED",
+    "mechanism": "with uniform esk, epk is exactly uniform over the whole (prime-order) group for EVERY base, and [ssk]epk is a bijection of it: the joint distribution carries zero base information (exact enumeration on a 53-element group)",
+    "control": "no toggle exists: this is information-theoretic given uniform esk; the only failure mode would be biased esk generation, which is an implementation bug, not a protocol mechanism",
+    "notes": "dists_identical_and_uniform=True shared_uniform=True predicate_degenerate=True"
+  },
+  {
+    "id": "N_f",
+    "target": "rogue-r registration",
+    "verdict": "BLOCKED",
+    "mechanism": "GroupHash is a random oracle; without an inversion function the attacker's hit probability is attempts/|G| ~ 20000/2^256",
+    "control": "toy order-53 group: empirical hit rate 0.018 ~= 1/53 = 0.019 -- security is exactly the RO preimage assumption, no more, no less",
+    "notes": "hits=0/20000 toy_hits=97/5300"
+  },
+  {
+    "id": "N_g",
+    "target": "injected/replayed post-mix garbage",
+    "verdict": "BLOCKED",
+    "mechanism": "the replayed C^L decrypts to a REAL note (AEAD fine, epoch-free C^L AD), but its commitment sits in the epoch-1 tree, not the claimed epoch-2 tree => membership-in-claimed-epoch check discards it",
+    "control": "authentication disabled => wallet accepts the replayed note (double-counts it): True",
+    "notes": "accepted=1 discarded=1 accepted_without_auth=2 (count pollution remains -- see A_F7b)"
+  },
+  {
+    "id": "N_h",
+    "target": "dsk from published D",
+    "verdict": "BLOCKED",
+    "mechanism": "recovering dsk from D requires a discrete log in the 256-bit group; the protocol's security here is assumption-based (DLP), as the article concedes (classically secure, not post-quantum)",
+    "control": "toy order-53 group: brute-force dlog recovers dsk (True) -- i.e. nothing but group size protects this branch",
+    "notes": "assumption-labeled: unconditional claims are limited to N_e"
+  }
+]

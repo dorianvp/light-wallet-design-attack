@@ -1,0 +1,307 @@
+########## D1 vs F11 — fetch-all / subtree-sharded witnesses (d1_f11_witness.py) ##########
+
+==============================================================================
+D1 — DEFENSE vs F11 (witness-update exclusion leak)
+==============================================================================
+tree: init 200,000 notes, +216,000/epoch (2.5 outputs/s), 6 epochs, sound-only inference
+
+strategy                                       | candidates after epoch 1..6                     | final   | exact pin? | fetched over 6 ep
+-----------------------------------------------+-------------------------------------------------+---------+------------+------------------
+campaign: leaf-level path siblings only        | 1 1 1 1 1 1                                     | 1       | YES        | 0.00 MB          
+DEFENDER letter-of-text: entire commitment set | 416,000 416,000 416,000 416,000 416,000 416,000 | 416,000 | no         | 41.47 MB         
+middle: 2^16 subtree roots, path-only          | 65,536 65,536 65,536 65,536 65,536 65,536       | 65,536  | no         | 0.00 MB          
+middle: subtree roots + full own subtree       | 65,536 65,536 65,536 65,536 65,536 65,536       | 65,536  | no         | 2.10 MB          
+(truth always in candidate set: True)
+
+Reading the trajectory:
+  * fetch-exact (campaign's premise, 'witnesses as usual' = fetch only the
+    needed leaf-level siblings): position pinned EXACTLY — F11 reproduces
+    against this reading. Positive control passes.
+  * fetch-all (the article's literal sentence 'All wallets must always
+    download and authenticate the entire note commitment and nullifier
+    sets'): the candidate set NEVER shrinks — zero positional information,
+    first-sync rule included (the first-sync fetch is the whole set,
+    uniform across wallets).
+  * shard-* (2^16-leaf subtree roots): candidates collapse ONCE to a single
+    2^16-leaf subtree (65,536 positions) after the first frontier crossing
+    and then STOP — no per-epoch compounding. Reason: coarser (2^17+) fetch
+    events never resolve which subtree of a pair the note is in, and the
+    note's own subtree root is never fetched as a sibling (shard-path
+    defers it, shard-full computes it locally). 65,536-anonymity forever.
+    shard-path still re-introduces an exact pin at SPEND time (a one-shot
+    full-witness completion fetch); shard-full avoids that by carrying the
+    note's whole subtree (~2 MiB one-time).
+
+Real-world price of the letter-of-text defense (32 B/commitment, nullifiers 32 B):
+ops/s | leaves/day | commit MB/d | +nullf MB/d | tx B  | current-day txs MB/d | overhead
+------+------------+-------------+-------------+-------+----------------------+---------
+1.0   | 86,400     | 2.76        | 5.53        | 1,000 | 86.4                 | 6.40%   
+1.0   | 86,400     | 2.76        | 5.53        | 2,000 | 172.8                | 3.20%   
+1.0   | 86,400     | 2.76        | 5.53        | 4,000 | 345.6                | 1.60%   
+2.5   | 216,000    | 6.91        | 13.82       | 1,000 | 216.0                | 6.40%   
+2.5   | 216,000    | 6.91        | 13.82       | 2,000 | 432.0                | 3.20%   
+2.5   | 216,000    | 6.91        | 13.82       | 4,000 | 864.0                | 1.60%   
+5.0   | 432,000    | 13.82       | 27.65       | 1,000 | 432.0                | 6.40%   
+5.0   | 432,000    | 13.82       | 27.65       | 2,000 | 864.0                | 3.20%   
+5.0   | 432,000    | 13.82       | 27.65       | 4,000 | 1728.0               | 1.60%   
+
+Verdict material for F11:
+  * Article as written avoids F11 entirely: zero information.
+  * Price: 2.8 / 6.9 / 13.8 MB/day of commitments at 1 / 2.5 / 5 outputs/s
+    (5.5 / 13.8 / 27.6 MB/day with nullifiers) = 0.8%-3.2% (1.6%-6.4% with
+    nullifiers) of the current-day transaction stream the same wallets
+    already download and trial-decrypt (the article's own performance
+    bullet). Consistent with the article's performance story: the design
+    eliminates trial-decrypting ALL HISTORY, not the 32-byte commitment
+    stream.
+  * Caveat: vs the QUIET-wallet ideal (~kB/day of C^L) this is a 100-1000x
+    regression of the fast path; 'authenticate' the whole set each epoch is
+    also beyond the article's text.
+  * Middle option: sharding leaks strictly less than the campaign's
+    leaf-level reading — floor 65,536 candidates instead of 1, reached in
+    ~1 epoch, then constant; steady-state cost a few 32-B subtree roots per
+    day (2 MiB one-time for shard-full).
+
+
+
+########## D2 vs F2/F3/F5/F9 — footnote-1 deletion discipline (d2_footnote1.py) ##########
+
+==============================================================================
+D2 — footnote-1-compliant server vs F2 / F3 / F5 / F9
+==============================================================================
+timeline: 12 epochs; address leaks at epoch 10; server state leaks at epoch 12
+(victim counts per epoch: 1 2 0 1 3 0 1 2 1 0 2 1)
+
+server policy                       | F2 live (ep10) | F2 live future | F3a/F9 post-hoc | F3b ssk static | F3b per-epoch keys | F5 live | F5 post-hoc log | reglog tieback
+------------------------------------+----------------+----------------+-----------------+----------------+--------------------+---------+-----------------+---------------
+retentive (baseline)                | 9/9 past       | 3/3 future     | 12/12 epochs    | 12/12          | 12/12              | YES     | 11 rows         | 10.0.0.9      
+disciplined G=1                     | 1/9 past       | 3/3 future     | 1/12 epochs     | 12/12          | 1/12               | YES     | 0 rows          | none          
+disciplined G=3                     | 3/9 past       | 3/3 future     | 3/12 epochs     | 12/12          | 3/12               | YES     | 0 rows          | none          
+disciplined G=7                     | 7/9 past       | 3/3 future     | 7/12 epochs     | 12/12          | 7/12               | YES     | 0 rows          | none          
+disciplined G=30                    | 9/9 past       | 3/3 future     | 12/12 epochs    | 12/12          | 12/12              | YES     | 0 rows          | none          
+retain buckets, delete links+reglog | 9/9 past       | 3/3 future     | 12/12 epochs    | 12/12          | 12/12              | YES     | 0 rows          | none          
+
+How to read the table (all count-readouts verified equal to ground truth):
+  * F2 live: while the attacker pair is live at epoch 10 it can read the
+    last G closed epochs (bucket retention window) PLUS every future epoch
+    as it closes — for ANY grace >= 1, because the index necessarily
+    exists in-service while the wallet is a live user. Deletion discipline
+    cannot shrink the live window below 'now + G'; it only destroys
+    history. (grace=0 would delete buckets at their own epoch close,
+    breaking the catch-up service entirely — non-functional, not tested.)
+  * F3a/F9 post-hoc: the later address leak reads only the retained G
+    epochs. Under G=1..7 the retroactive 'all past daily groups' claim
+    collapses to 'the last G days'. Under the retentive baseline (the
+    campaign's server) all 12 epochs link — positive control.
+  * F3b (ssk leak): with the protocol's single static ssk, ANYONE holding
+    ssk rebuilds the ENTIRE history from public signed post-mix lists —
+    deletion discipline is powerless (lists are on-chain/public forever).
+    The article's own optimization paragraph (per-epoch detection keys,
+    old keys deleted) restores exactly the same G-day window.
+  * F5: live observation links daily groups regardless of policy (the
+    query hits the wire before any deletion could apply); post-hoc, the
+    disciplined query log is empty (links deleted at serve).
+  * Registration-log tieback: deleting (ip, r, G_r) immediately (TTL 0 —
+    the server never functionally needs it again) removes the
+    bucket -> registering-IP join. The retentive server keeps it.
+
+
+########## D3 vs F4 — pad-to-K + idle cover (d3_padding.py) ##########
+
+==============================================================================
+D3 — pad-to-K defense vs F4 (P1 volume leak)
+==============================================================================
+
+--- Zipf s=1.0 (heavy tail): E[n]=11.11 notes/epoch, H(n)=4.61 bits, support 1..50
+padding         | adv(1v20) | adv(1v5) | wallets hidden (n<=K) | bandwidth mult | @580B/CL  | @1kB/CL   | bits leaked about n
+----------------+-----------+----------+-----------------------+----------------+-----------+-----------+--------------------
+unpadded        | 1         | 1        | 0.0%                  | 1.00x          | 6.4 kB/d  | 11.1 kB/d | 4.61 / 4.61 bits   
+K=5             | 1         | 0        | 50.7%                 | 1.13x          | 7.3 kB/d  | 12.5 kB/d | 3.57 / 4.61 bits   
+K=10            | 1         | 0        | 65.1%                 | 1.39x          | 8.9 kB/d  | 15.4 kB/d | 2.74 / 4.61 bits   
+K=20            | 0         | 0        | 80.0%                 | 2.04x          | 13.1 kB/d | 22.7 kB/d | 1.70 / 4.61 bits   
+K=50            | 0         | 0        | 100.0%                | 4.50x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 4.61 bits   
+K=epoch-max(50) | 0         | 0        | 100.0%                | 4.50x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 4.61 bits   
+
+--- Zipf s=1.2: E[n]=8.48 notes/epoch, H(n)=4.12 bits, support 1..50
+padding         | adv(1v20) | adv(1v5) | wallets hidden (n<=K) | bandwidth mult | @580B/CL  | @1kB/CL   | bits leaked about n
+----------------+-----------+----------+-----------------------+----------------+-----------+-----------+--------------------
+unpadded        | 1         | 1        | 0.0%                  | 1.00x          | 4.9 kB/d  | 8.5 kB/d  | 4.12 / 4.12 bits   
+K=5             | 1         | 0        | 61.6%                 | 1.21x          | 6.0 kB/d  | 10.3 kB/d | 2.91 / 4.12 bits   
+K=10            | 1         | 0        | 74.6%                 | 1.61x          | 7.9 kB/d  | 13.7 kB/d | 2.12 / 4.12 bits   
+K=20            | 0         | 0        | 86.4%                 | 2.56x          | 12.6 kB/d | 21.7 kB/d | 1.23 / 4.12 bits   
+K=50            | 0         | 0        | 100.0%                | 5.89x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 4.12 bits   
+K=epoch-max(50) | 0         | 0        | 100.0%                | 5.89x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 4.12 bits   
+
+--- Zipf s=1.5 (steep): E[n]=5.47 notes/epoch, H(n)=3.32 bits, support 1..50
+padding         | adv(1v20) | adv(1v5) | wallets hidden (n<=K) | bandwidth mult | @580B/CL  | @1kB/CL   | bits leaked about n
+----------------+-----------+----------+-----------------------+----------------+-----------+-----------+--------------------
+unpadded        | 1         | 1        | 0.0%                  | 1.00x          | 3.2 kB/d  | 5.5 kB/d  | 3.32 / 3.32 bits   
+K=5             | 1         | 0        | 75.5%                 | 1.44x          | 4.6 kB/d  | 7.9 kB/d  | 1.99 / 3.32 bits   
+K=10            | 1         | 0        | 85.6%                 | 2.17x          | 6.9 kB/d  | 11.9 kB/d | 1.31 / 3.32 bits   
+K=20            | 0         | 0        | 93.1%                 | 3.81x          | 12.1 kB/d | 20.8 kB/d | 0.69 / 3.32 bits   
+K=50            | 0         | 0        | 100.0%                | 9.14x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 3.32 bits   
+K=epoch-max(50) | 0         | 0        | 100.0%                | 9.14x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 3.32 bits   
+
+--- Zipf s=2.0 (most wallets get 1-2/day): E[n]=2.77 notes/epoch, H(n)=2.19 bits, support 1..50
+padding         | adv(1v20) | adv(1v5) | wallets hidden (n<=K) | bandwidth mult | @580B/CL  | @1kB/CL   | bits leaked about n
+----------------+-----------+----------+-----------------------+----------------+-----------+-----------+--------------------
+unpadded        | 1         | 1        | 0.0%                  | 1.00x          | 1.6 kB/d  | 2.8 kB/d  | 2.19 / 2.19 bits   
+K=5             | 1         | 0        | 90.1%                 | 2.12x          | 3.4 kB/d  | 5.9 kB/d  | 0.90 / 2.19 bits   
+K=10            | 1         | 0        | 95.4%                 | 3.79x          | 6.1 kB/d  | 10.5 kB/d | 0.49 / 2.19 bits   
+K=20            | 0         | 0        | 98.2%                 | 7.30x          | 11.7 kB/d | 20.2 kB/d | 0.21 / 2.19 bits   
+K=50            | 0         | 0        | 100.0%                | 18.06x         | 29.0 kB/d | 50.0 kB/d | 0.00 / 2.19 bits   
+K=epoch-max(50) | 0         | 0        | 100.0%                | 18.06x         | 29.0 kB/d | 50.0 kB/d | 0.00 / 2.19 bits   
+
+--- uniform 1..50 (control): E[n]=25.50 notes/epoch, H(n)=5.64 bits, support 1..50
+padding         | adv(1v20) | adv(1v5) | wallets hidden (n<=K) | bandwidth mult | @580B/CL  | @1kB/CL   | bits leaked about n
+----------------+-----------+----------+-----------------------+----------------+-----------+-----------+--------------------
+unpadded        | 1         | 1        | 0.0%                  | 1.00x          | 14.8 kB/d | 25.5 kB/d | 5.64 / 5.64 bits   
+K=5             | 1         | 0        | 10.0%                 | 1.01x          | 14.9 kB/d | 25.7 kB/d | 5.41 / 5.64 bits   
+K=10            | 1         | 0        | 20.0%                 | 1.04x          | 15.3 kB/d | 26.4 kB/d | 4.98 / 5.64 bits   
+K=20            | 0         | 0        | 40.0%                 | 1.15x          | 17.0 kB/d | 29.3 kB/d | 3.92 / 5.64 bits   
+K=50            | 0         | 0        | 100.0%                | 1.96x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 5.64 bits   
+K=epoch-max(50) | 0         | 0        | 100.0%                | 1.96x          | 29.0 kB/d | 50.0 kB/d | 0.00 / 5.64 bits   
+
+Reading the tables:
+  * Positive control: unpadded, 1 vs 20 notes give different session
+    volumes => advantage 1 (campaign A_F4 reproduces).
+  * (a) Distinguishing advantage(1-note vs 20-note victim) is EXACTLY 0 for
+    every fixed cap K >= 20 and for K = epoch-max — all padded sessions are
+    byte-identical. At K=10 the (1,20) pair separates again (20 > K), but
+    1 vs 5 (both under the cap) stays 0.
+  * (b) The multiplier is the honest cost, and it is SMALL in absolute
+    terms. Pad-to-epoch-max (K=50) costs 4.5-9.1x the honest volume for
+    Zipf receive counts = a flat 29 kB/day at 580 B per C^L (50 kB/day at
+    1 kB) for EVERY wallet, every day, forever covered — ~11-18 MB/year,
+    vs the 86-1700 MB/day current-day transaction stream the same wallets
+    already download and trial-decrypt. A MODEST cap K=20 hides 80-97% of
+    Zipf receive counts (40% even in the adversarial uniform control) at
+    1.2-3.8x honest volume = 12-13 kB/day. Worst-case padding is NOT
+    catastrophic for performance; F4's 'P1 unachievable without worst-case
+    padding' is true only if one refuses to set any padding parameter at
+    all — the article's own 'constant-bandwidth protocol' sentence is a
+    padding mandate waiting for a K.
+  * (c) Bits leaked about n at cap K = H(n) - H(n|see max(n,K)): at K=20,
+    Zipf s=1.2: 4.12 bits -> 1.23 bits (only 'over-cap vs not' + tail
+    shape survives); at K=50: exactly 0 bits.
+  * (d) Residual the defense cannot close: wallets with n > K remain
+    identifiable as busy (under Zipf: 20% at s=1.0, 13.6% at s=1.2, 6.9%
+    at s=1.5, ~3% at s=2.0 — uniform: 60%), and an attacker who knows the
+    address can push the victim's bucket above any cap at fee cost per
+    dust note or ~zero cost via forged post-mix entries (F7b), forcing
+    visible >K volume: the DoS horn of the author's own trilemma. Padding
+    bounds the AMPLIFICATION (the padding bill caps at K for honest
+    wallets) but not the distinguishability of flooded victims.
+  * Idle-cover: a fetch every epoch (even with 0 notes) at cap K makes the
+    'when' channel constant too; cost = the same K x |C^L| per epoch —
+    already included in the kB/day column. Constant-shape cover is,
+    however, exactly what F13's intersection attacks erode across epochs
+    (offline days stand out) — padding fixes the per-epoch shape, not the
+    multi-epoch statistical leak.
+
+
+
+########## D4 vs F8 — every textual reading of the handover (d4_f8_readings.py) ##########
+
+==============================================================================
+D4 — every textual reading of the non-indexed handover vs F8
+==============================================================================
+
+reading                                      | service works?      | dsk recovered? | silent all-epoch detection? | note                                                                                                                             
+---------------------------------------------+---------------------+----------------+-----------------------------+----------------------------------------------------------------------------------------------------------------------------------
+R1 literal: x = dsk + PRF^D(K_TT, e)         | yes                 | yes            | yes                         | the text's formula, verbatim                                                                                                     
+R2 aggregate: hand (x_e, e) for e in {1,2,3} | yes                 | yes            | yes                         | several epochs delegated at once — each x_e linear in dsk                                                                        
+R3 hand over only PRF^D(K_TT, e) (no dsk)    | NO — service broken | no             | no                          | wrong key: C^D is encrypted to D* = D + [f]G_2, opening needs dsk too                                                            
+R4 hand over group element D* (no scalar)    | NO — service broken | n/a            | n/a                         | trial-decryption computes [x]epk — needs the SCALAR; no pairing-based decryption exists in the text; dlog(D*) vs G_2 protects dsk
+R5 blind x with fresh nonce b (x + b)        | NO — service broken | no             | no                          | server cannot unblind without b — service dies                                                                                   
+
+R6 (two-epoch cancellation, no address needed): x1 - x2 = f1 - f2 exactly
+(dsk cancels): True — the difference contains NO dsk, so it gains
+the attacker nothing beyond what any address-holder already has.
+
+R7 (ephemeral handover — defender policy, delete x after serving):
+  * retroactive variant (address leaks AFTER the delegation): x is gone ->
+    dsk NOT recoverable from server state: True
+  * contemporaneous variant (one colluding sender WHILE the delegation is
+    live, the same condition F2 needs): dsk = x - f recovers:
+    True — deletion cannot help; the scalar is on the wire and
+    in the delegate's memory while in use.
+
+CONCESSION. Every reading of the article's text that preserves the
+non-indexed service hands the delegate a value linear in dsk:
+  * R1/R2 function and leak (dsk recovered, silent all-epoch detection,
+    zero further victim queries — F8 in full).
+  * R3/R4/R5 break the service itself (the delegate cannot trial-decrypt).
+  * R6 is a dead end for the attacker (no dsk in the difference).
+  * R7 narrows F8's RETROACTIVE variant to the delegation window but
+    cannot touch the contemporaneous one.
+The article's only escape hatch is its own future-work note (IBE /
+"daira's detection key design" simplification) — i.e., a redesign, not a
+reading. F8 SURVIVES best-effort defense unchanged: the linear structure
+dsk + PRF^D(K_TT, e) is load-bearing for the fallback path.
+
+No patch found within the text. F8 is CONCEDED in full (High severity).
+
+
+
+########## D5 vs F5 — fresh Tor circuit per lookup (d5_tor.py) ##########
+
+==============================================================================
+D5 — fresh-Tor-circuit-per-lookup defense vs F5
+==============================================================================
+(a) same-IP baseline: DS groups 300 wallets x ~20 epoch-tags; cross-day pairs linked: 57,000 (100% of truth) — F5 reproduces. [positive control]
+(b) fresh circuit per lookup, each tag queried exactly once: every circuit-id group is a singleton -> cross-day pairs linked by the DS ALONE: 0 (0%). The DS's only remaining signal is bucket content (P3-conceded counts for queried epochs), not linkage.
+
+(c) tag VALUE is a persistent pseudonym: any re-query of a past epoch's tag re-links the wallet's identity across the days that tag was sighted:
+re-query prob per tag | tags sighted >=2x | wallets identity-re-linked
+----------------------+-------------------+---------------------------
+q=0.00                | 0.0% of tags      | 0.0% of wallets           
+q=0.05                | 5.0% of tags      | 64.3% of wallets          
+q=0.20                | 20.6% of tags     | 99.0% of wallets          
+q=0.50                | 50.3% of tags     | 100.0% of wallets         
+q=1.00                | 100.0% of tags    | 100.0% of wallets         
+    Even q=0.05 (rare reinstalls/failovers) re-links ~64% of wallets over 20 epochs; the defense requires an unstated 'each tag queried exactly once, ever' discipline.
+
+(d) catch-up burst residual (20% of wallets offline 5 days, then D queries seconds apart from D fresh circuits), DS clusters arrivals within window w:
+cluster window | pair precision | pair recall
+---------------+----------------+------------
+w=10s          | 55.1%          | 79.8%      
+w=30s          | 48.1%          | 100.0%     
+w=120s         | 28.3%          | 100.0%     
+    A naive time-window classifier recovers 80-100% of co-synced burst pairs (recall) at 28-55% precision — the false positives come from chaining unrelated routine queries at wide windows. A smarter classifier (bursts are tight D-event groups seconds apart) would push precision up; the point stands: fresh circuits do not hide the temporal correlation the wallet itself creates at catch-up sync — the DS does not need the IP, it needs only the clock.
+
+(e) GPA timing correlation (article-conceded): M concurrent queriers in one hour, latency jitter U[0,J], nearest-match linking:
+concurrent queriers | jitter | uniquely + correctly linked
+--------------------+--------+----------------------------
+M=10                | J=2s   | 99.5%                      
+M=10                | J=10s  | 97.1%                      
+M=10                | J=60s  | 85.4%                      
+M=100               | J=2s   | 94.6%                      
+M=100               | J=10s  | 76.2%                      
+M=100               | J=60s  | 19.5%                      
+M=1000              | J=2s   | 57.3%                      
+M=1000              | J=10s  | 6.2%                       
+M=1000              | J=60s  | 0.0%                       
+
+Verdict material for F5:
+  * The article's own mitigation (fresh Tor circuit per lookup) DEFEATS the
+    DS-alone variant of F5: 0% cross-day linkage (condition b) — the
+    campaign's F5 as demonstrated (same-IP sync) dies under it.
+  * Residuals, quantified:
+      - tag-value persistence (c): any re-query re-links; q=0.05 already
+        re-sights tags, q=0.5+ re-links most history. The defense requires
+        an unstated 'each tag queried exactly once, ever' discipline.
+      - burst timing (d): catch-up syncs create tight multi-circuit
+        clusters; a naive window classifier already recovers 80-100% of
+        burst pairs (28-55% precision, improvable) — the DS does not need
+        the IP, it needs only the clock.
+      - GPA timing (e): exactly as the article concedes. With few
+        concurrent queriers (M=10) linking is near-certain even at 60s
+        jitter; at M=1000 and 60s jitter, unique matches drop but a GPA
+        with multi-day observation recovers most (not simulated: the
+        per-wallet query cadence fingerprint compounds daily).
+  * F5 WEAKENS (Medium -> Medium-Low): survives only in the article's own
+    conceded forms (GPA + timing, bursts, re-query sloppiness), not as a
+    DS-only capability.
+
+

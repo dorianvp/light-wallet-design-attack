@@ -1,0 +1,22 @@
+# Node — Quint CLI is installed locally via npm (`npm install`)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Lean build artifacts (regenerate with `lake build`)
+lean/.lake/
+
+# Apalache/Quint verification transient output (regenerate with `quint verify`)
+_apalache-out/
+quint/_apalache-out/
+
+# Regenerable tool output (see quint/README.md commands; ~59 MB of Apalache
+# JSON blobs and raw simulator traces — the curated evidence lives in
+# quint/traces/*.md, quint/VERIFICATION.md, and the .txt summaries)
+quint/verify-results/
+quint/traces/raw/
+
+# macOS / editor
+.DS_Store
