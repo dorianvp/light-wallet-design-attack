@@ -81,6 +81,26 @@ world with **zero server breaches**.
 `C^PoM` in the post-mix list; full-epoch on-chain attribution needs one MA (or every
 sender). The counts-only result needs no MA at all.
 
+**Mitigation boundary (address diversification).** Giving each counterparty a
+different diversified address does not help **as written**: the article derives
+`s, r, dsk` from the viewing key without a diversifier, so every diversified address
+carries the *same* detection tuple `(G_r, S_r, K_TT, D)` — different counterparties
+compute the same tag family `T_e` and the DS's bucket aggregates payments across all
+of the wallet's addresses (consistent with the article's own "group … by wallet"
+semantics). With per-diversifier derivation (the F1 fix) plus
+one-address-per-counterparty discipline, the leakage unit shrinks to the address: a
+colluding counterparty unlocks only its own address's bucket. What does not shrink:
+(a) indexed detection requires the wallet to hand its DS every (address, epoch) tag,
+so the DS holds each bucket by construction and wallet-level privacy reduces to the
+*unlinkability of the wallet's N addresses at the DS* — registration/query linkage
+(same network identity; catch-up bursts 80–100% recall at 28–55% precision; 5% tag
+re-query re-links 64.3% of wallets over 20 epochs), i.e. the network-anonymity layer
+the article frames as optional; (b) the DS can dust-probe any address it serves once
+to enroll in its counterparty set and compute its tags for all epochs; (c) any
+reused or published address re-creates a multi-counterparty bucket; (d) F8/F3b
+remain non-expiring *per address*. Diversification thus converts a counterparty-trust
+problem into a query-anonymity problem; it does not remove the structural condition.
+
 **Why the conditional defense fails.** "As long as the address is kept secret" is
 presented as an achievable operating state; for a payment-receiving address it is
 not — secrecy must hold against every counterparty forever, and the DS can force
